@@ -1,5 +1,5 @@
 # Comparison of direct and nested PCR for rpoB metabarcoding
-![image](https://github.com/GTG1988A/Comparison_of_direct_and_nested_PCR_for_rpoB_metabarcoding/assets/83345122/df51fb36-78ba-4cdd-b49a-1086544eaff1)
+![image](https://github.com/GTG1988A/Comparison_of_direct_and_nested_PCR_for_rpoB_metabarcoding/assets/83345122/7e23c06f-a8a6-4d30-a595-06a7926a00b9)
 
 ## 1. Download genomes with genome_update
 ### Genome_update installation
