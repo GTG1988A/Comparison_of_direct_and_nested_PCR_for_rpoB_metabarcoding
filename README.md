@@ -43,17 +43,10 @@ MARSVWKGPFVDGYLLKKAEKVREGGRNEVIKMWSRRSTILPQFVGLTFGVYNGNKHVPVSVSEEMVGHKFGEFAPTRTY
 ```
 so I made a bash script to keep only the protein identifier (WP_ ...)
 
+/!\please don't forget to change your variable paths in the script 
+
 ```bash=
-$ cat rename_faa.sh
-
-#!/bin/bash
-
-for file in /path_to_data/protein_seq/arc_refseq_cg/2024-02-05_09-01-02/files/*.faa.gz; do
-
-    filename=$(basename "$file" .faa.gz)
-
-    zcat "$file" | awk '/^>/ {print $1; next} {print}' > "/path_to_data/protein_seq/arc_refseq_cg/2024-02-05_09-01-02/files/modified/${filename}_modified.faa"
-done
+./rename_faa.sh
 ```
 
 ### 2.b Preparing .fna files
@@ -68,22 +61,9 @@ GTGGTTGCCCTTCATGGCGCCGTTCCGCGCCGTTCCGCCGCGTCCTTCACCAATATCAAGGTTCGCGTGCGCGACGACCG
 
 I only keep the protein_id section with the script:
 
+/!\please don't forget to change your variable paths in the script 
 ```bash=
-#!/bin/bash
-
-for file in PATH/fna/arc_refseq_cg/2024-02-29_13-59-50/files/*.fna.gz; do
-    filename=$(basename "$file" .fna.gz)
-
-    zcat "$file" | awk '/^>/ {
-        if (match($0, /\[protein_id=([^]]*)\]/, arr)) {
-            print ">" arr[1];
-            skip_seq = 0;
-        } else {
-            skip_seq = 1;
-        }
-        next
-    } !skip_seq {print}' > "PATH/fna/arc_refseq_cg/2024-02-29_13-59-50/files/modified/${filename}_modified.fna"
-done
+./rename_fna.sh
 
 ```
 
@@ -107,41 +87,9 @@ rm tmp.txt
 ```
 and I create a script that loops through the command line by file 
 
-
+/!\please don't forget to change your variable paths in the script 
 ```bash=
-#!/bin/bash
-
-# Path to the file containing the list of genome names
-names_list="nom_genomes.txt"
-
-# Check that the file containing the list of genome names exists
-if [ ! -f "$names_list" ]; then
-    echo "the file $names_list doesn't exist."
-    exit 1
-fi
-
-mkdir -p .output_fetchMGS
-
-repertory_faa="/PATH/rpob/protein_seq/arc_refseq_cg/2024-02-05_09-01-02/files/modified/"
-repertory_fna="/PATH/rpob/cds_genomic_seq/arc_refseq_cg/2024-02-05_09-01-16/files/modified/"
-path_general_output="output_fetchMGS/"
-
-# Reading the list of genome names
-while IFS= read -r genome; do
-    # Building FAA and FNA file paths
-    file_faa="${repertory_faa}${genome}_protein_modified.faa"
-    file_fna="${repertory_fna}${genome}_cds_from_genomic.fna.gz_modified.fna"
-
-    # Checking the existence of the FNA file
-    if [ -e "$fichier_fna" ]; then
-        output_folder="${path_general_output}${genome}_output"
-
-        #=fetchMGs.pl
-        ./../fetchMGs/fetchMGs.pl -m extraction "$file_faa" -d "$file_fna" -c COG0085 -o "$output_folder"
-    else
-        echo "Missing .fna file for the genome $genome"
-    fi
-
+./launch_FetchMGS.sh
 ```
 
 It takes a while to run, but it's fetchMGS and you only have to do it once.
@@ -157,59 +105,11 @@ The taxid must be added to launch obiconvert before EcoPCR. I make a table of co
 cut -f1,7 genome/arc_refseq_cg/2024-02-05_09-00-49/assembly_summary.txt > correspondance_tab.txt
 ```
 
-
-
 Thanks to this correspondence table, I've made a python script which will go into each folder resulting from FetchMGS; find the ID and the corresponding taxid then it will add it to the name of the sequence next to the protein ID.
+
+/!\please don't forget to change your variable paths in the script 
 ```python=
-import os
-
-# Path to the refseqid and taxid correspondence file
-chemin_correspondances = "/path/result_correspondance_tab/tableau_resultat.tsv"
-
-# Load matches from the file into a dictionary
-correspondances = {}
-with open(chemin_correspondances, 'r') as f:
-    for ligne in f:
-        elements = ligne.strip().split()
-        if len(elements) == 2:
-            refseq_id, taxid = elements
-            correspondances[refseq_id] = int(taxid)
-
-# Folder containing .faa and .fna files
-dossier_parent = "/path/output_fetchMGS"
-
-# Browse folders in the parent folder
-for dossier in os.listdir(dossier_parent):
-    chemin_dossier = os.path.join(dossier_parent, dossier)
-
-    # Ensure that the item is a folder
-    if os.path.isdir(chemin_dossier):
-        # Extraire l'identifiant RefSeq du nom du dossier
-        refseq_id = dossier.split("_")[0] + "_" + dossier.split("_")[1]
-
-        # Retrieve the taxid associated with the file
-        taxid = correspondances.get(refseq_id, None)
-
-        if taxid is not None:
-            for fichier in ["COG0085.faa", "COG0085.fna"]:
-                chemin_fichier = os.path.join(chemin_dossier, fichier)
-
-                with open(chemin_fichier, 'r') as f:
-                    lignes = f.readlines()
-
-                # Update the sequence name in each line
-                for i in range(len(lignes)):
-                    if lignes[i].startswith('>'):
-                        lignes[i] = f">{lignes[i][1:].strip()} {taxid}\n"
-
-                # Write the updated content to the file
-                with open(chemin_fichier, 'w') as f:
-                    f.writelines(lignes)
-
-            print(f"The names of the sequences in {folder} have been updated with the taxid {taxid}.")
-        else:
-            print(f"Taxid not found for folder {folder}.")
-
+python add_taxid.py
 ```
 
 
@@ -300,25 +200,9 @@ I reformat these files so that they are in the format accepted by krona:
 
 NB: I'm changing the True and False by hand in the script because I didn't add the argument.
 
+/!\please don't forget to change your variable paths in the script 
 ```python=
-import sys
-
-if len(sys.argv) != 3:
-    print("Usage: python script.py input_file output_file")
-    sys.exit(1)
-
-input_file = sys.argv[1]
-output_file = sys.argv[2]
-
-with open(input_file, 'r') as f_in:
-    with open(output_file, 'w') as f_out:
-        for line in f_in:
-            id_, taxonomy = line.strip().split('\t')
-            taxonomy_levels = [level.split('__')[1] for level in taxonomy.split(';')]
-            kingdom, phylum, classe, ordre, family, genus, species = taxonomy_levels
-            new_line = f"{id_}\t1\t{species};{genus};{family};{ordre};{classe};{phylum};{kingdom}\tFalse\n"
-            f_out.write(new_line)
-
+python format_krona.py input_file output_file
 ```
 
 
@@ -341,6 +225,7 @@ cut -f 2-4 final_results.tsv > input.tsv
 ```
 
 I run the script to get the krona:
+TODO: add  make_krona_xml_bis.py
 ```bash=
 $ python make_krona_xml_bis.py input.tsv output.xml  --name rpob -v --color_label amplified  --dataset_labels sequence
 # launch krona
@@ -379,32 +264,9 @@ grep -v -F -f liste_id_ecoPCR_sort.txt liste_id_concatened_COG0085_sort.txt > no
 
 I use this script to remove non-amplified genomes 
 
-```python=
-from Bio import SeqIO
-
-def filter_sequences(fasta_file, id_list_file, output_file):
-    with open(id_list_file, 'r') as f:
-        id_list = set(line.strip() for line in f)
-
-    with open(output_file, 'w') as out_f:
-        for record in SeqIO.parse(fasta_file, 'fasta'):
-            seq_id = record.description.strip()
-
-            if seq_id.split('|')[0] not in id_list:
-                out_f.write('>' + record.description + '\n')
-                out_f.write(str(record.seq) + '\n')
-if __name__ == "__main__":
-    fasta_file = "concatenated_COG0085.fna"
-    id_list_file = "Wp_id_not_amplified.txt"
-    output_file = "fichier_filtre.fasta"
-
-    filter_sequences(fasta_file, id_list_file, output_file)
-
-
-```
-
+/!\please don't forget to change your variable paths in the script 
 ```bash=
-python suppression_sequence_dans_un_fasta.py
+python deletion_seq_in_fasta.py
 ```
 Now I'm going to reformat the fasta with Obitools to run EcoPCR on it.
 
