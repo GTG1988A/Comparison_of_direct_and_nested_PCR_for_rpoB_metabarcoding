@@ -125,6 +125,7 @@ find output/ -name "COG0085.fna" -exec cat {} + > concatenated_COG0085.fna
 ### Obitools for rpod sequences
 
 ```bach!
+mkdir ecoPCR_db/
 obiconvert --fasta concatenated_COG0085.fna --ecopcrdb-output=ecoPCR_db/rpob -t ncbi_tax_dumb/
 ```
 
@@ -271,6 +272,7 @@ python deletion_seq_in_fasta.py
 Now I'm going to reformat the fasta with Obitools to run EcoPCR on it.
 
 ```bash=
+mkdir ecoPCR_db/
 $ obiconvert --fasta fichier_filtre.fasta --ecopcrdb-output=ecoPCR_db/rpob -t ../ncbi_tax_dumb/2024-15-02/
 ```
 
@@ -357,4 +359,116 @@ $ ktImportXML output.xml
 
 ```
 
+# Comparison with  16S
+I have a database of 16S sequences extract from refseq and genbank genomes, which I can download using genome_updater.
+```bash=
+./genome_updater.sh -g "archaea,bacteria" -d "refseq,genbank" -M "gtdb" -f "genomic.gff.gz,genomic.fna.gz" -a -o download -N -t 4
+```
+for this we need to uses the script src/extract_16S23S.py
 
+we need 2 files genome_dirs.txt and genome_files_with_taxid.txt created respectively by the scripts find_dirs.sh and find_name.py by adapting the paths of the download databases. 
+the two files resemble a: 
+```bash=
+gagoutin@genobioinfo2 ~/work/test_16S/base_16S_Geraldine $ head -2 genome_dirs.txt
+/home/gagoutin/work/base_données/NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/415
+/home/gagoutin/work/base_données/NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/395
+$ head -2 genome_files_with_taxid.txt
+/home/gagoutin/work/base_données//NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/415/GCA_018630415.1_ASM1863041v1_genomic.fna.gz GCA_018630415.1 1280
+/home/gagoutin/work/base_données//NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/395/GCA_018630395.1_ASM1863039v1_genomic.fna.gz GCA_018630395.1 1280
+```
+and then run the script:
+
+```bash=
+python extract_16S23S.py -a genome_dirs.txt -t genome_files_with_taxid.txt
+```
+
+The genomes in this database are kept only if they also have an rpoB sequence to make the comparison reliable.
+I retrieve the folder names of the fetchMGS results and I retrieve the names of the genomes that have a non-empty fna file.
+
+```bash=
+l output_fetchMGS/*/*.fna > fna_files.txt
+python find_fna_not_empty.py > genomes_names_rpoB.txt
+```
+
+For the 16S genomes, after running the extract script  extract_16S23S.py  we get a tsv file that looks like this:
+```bash=
+$ head 16S.tsv
+gene_id seqid   product gene_name       start   end     strand  circular        seqid_length    partial genome_name     species_taxid
+rna-MAG715_00878        JAANXF010000016.1       16S ribosomal RNA       16S     22324   23807   +       False   83241   False   GCA_018263395.1 2687197
+rna-MAG471_00900        JAANXB010000052.1       16S ribosomal RNA       16S     6007    7522    -       False   42085   False   GCA_018263555.1 2024894
+rna-MAG458_00410        JAANXA010000013.1       16S ribosomal RNA       16S     19451   20920   +       False   59501   False   GCA_018263505.1 2024843
+rna-MAG453_01709        JAANWZ010000126.1       16S ribosomal RNA       16S     16263   17787   +       False   24252   False   GCA_018263585.1 2212469
+rna-MAG551_02765        JAANXD010000102.1       16S ribosomal RNA       16S     242     1810    +       False   17091   False   GCA_018263435.1 1127984
+rna-MAG451_03223        JAANWY010000396.1       16S ribosomal RNA       16S     5367    6870    -       False   14192   False   GCA_018263655.1 2073117
+rna-MAG431_00147        JAANWX010000004.1       16S ribosomal RNA       16S     75386   76912   +       False   107298  False   GCA_018263575.1 2026724
+rna-MAG581_01280        JAANXE010000022.1       16S ribosomal RNA       16S     141497  143009  -       False   162169  False   GCA_018263475.1 2026735
+rna-KGY51_12075 JAGXLS010000180.1       16S ribosomal RNA       16S     1       273     -       False   2851    True    GCA_018334605.1 1921580
+```
+
+So we get the 11th column which is the gene_name, I take it out -u and I get this list back
+
+```bash=
+zcat 16S.tsv.gz| cut -f11 | sort -u > /PATH/genome_name_16S.txt
+```
+
+I recover those that are in common, so I look for the rpob genomes in the 16S genomes and if it's found it's good:
+grep  -F -f genome_name_16S.txt genomes_names_rpoB.txt > common_genomes.txt
+
+We therefore need to remove those that are not in common in the 16S fasta.
+I'm looking for which 16S genome is not in the genomes that have rpob
+
+```bash
+grep -v -F -f genomes_names_rpoB.txt genome_name_16S.txt > not_common.txt
+```
+
+I retrieve the rows corresponding to these genes from my tsv:
+```bash=
+awk -F'\t'  'NR==FNR{genes[$1]; next} $11 in genes' not_common.txt 16S.tsv > output.tsv
+gene_id seqid   product gene_name       start   end     strand  circular        seqid_length    partial genome_name     species_taxid
+rna-HQ400_RS13095       NZ_CP053879.1   16S ribosomal RNA       16S     2835345 2836889 -       True    4535455 False   GCF_018802265.1 650
+rna-HQ400_RS14170       NZ_CP053879.1   16S ribosomal RNA       16S     3049597 3051141 -       True    4535455 False   GCF_018802265.1 650
+rna-HQ400_RS14960       NZ_CP053879.1   16S ribosomal RNA       16S     3225998 3227542 -       True    4535455 False   GCF_018802265.1 650
+rna-HQ400_RS16380       NZ_CP053879.1   16S ribosomal RNA       16S     3513214 3514758 -       True    4535455 False   GCF_018802265.1 650
+```
+
+This will allow me to retrieve the seqid that will allow me to delete this sequence in my fasta using the delete_sequence_in_a_fasta.py script.
+
+```bash=
+cut -f2 output.tsv > seqid_not_com.txt
+python delete_sequence_in_a_fasta.py
+```
+
+Formatting my new fasta so that it is compatible with EcoPCR with obiconvert 
+
+```bash=
+mkdir ecoPCR_db/
+obiconvert --fasta new_fasta_file.fasta --ecopcrdb-output=ecoPCR_db/16S -t ncbi_tax_dumb/2024-15-04/
+```
+if you ever get obiconvert errors due to an unknown ID, delete the sequences concerned. They are due to a lack of coherence between the different taxonomies.
+
+Now going to use this fasta to launch my EcoPCR 16S.
+
+
+| 16S_F  | 16S_R |
+| -------- | -------- | 
+| GAAGAGTTTGATCATGGCTC|AAGGAGGTGATCCAGCCGCA|
+
+```bash=
+ecoPCR -d ecoPCR_db/16S -e 2  GAAGAGTTTGATCATGGCTC AAGGAGGTGATCCAGCCGCA  > 16S.ecopcr
+```
+
+We retrieve the identifiers of the species amplified by the primers
+```bash=
+awk '!/^#/{print $1}' FS="|" 16S.ecopcr > id_amplified.txt
+```
+
+We also retrieve the same list of identifiers from my input fasta file in order to have a list of all those that are not in common. So that's all the species that haven't been amplified.
+```bash=
+grep ">" treatment_commun/fichier_filtre.fasta | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
+```
+To find out the difference between the two
+```bash=
+grep -v -F -f id_amplified.txt id_seq_total.txt > not_amplified.txt
+```
+
+Then turn the steps as above to make the krona graph
