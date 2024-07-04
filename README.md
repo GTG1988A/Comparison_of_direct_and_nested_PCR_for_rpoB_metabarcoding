@@ -360,9 +360,10 @@ $ ktImportXML output.xml
 ```
 
 # Comparison with  16S
-I have a database of 16S sequences extract from refseq and genbank genomes, which I can download using genome_updater.
+I have a database of 16S sequences extract from refseq genomes which use gff, which I can download using genome_updater.
+
 ```bash=
-./genome_updater.sh -g "archaea,bacteria" -d "refseq,genbank" -M "gtdb" -f "genomic.gff.gz,genomic.fna.gz" -a -o download -N -t 4
+./../genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "genomic.gff.gz,genomic.fna.gz" -t 12 -N
 ```
 for this we need to uses the script src/extract_16S23S.py
 
