@@ -81,8 +81,8 @@ I'm going to get an error because there are too many entries.
 So, I get the file names: 
 
 ```
-ls cds_genomic_seq/arc_refseq_cg/2024-02-05_09-01-16/files/modified/ > tmp.txt
-sed 's/_cds_from_genomic\.fna\.gz_modified\.fna//' > noms_des_fichiers.txt
+ls protein_seq/arc_refseq_cg/2024-02-05_09-01-16/files/modified/ > tmp.txt
+sed 's/_protein_modified\.faa//' > names_files.txt
 rm tmp.txt
 ```
 and I create a script that loops through the command line by file 
