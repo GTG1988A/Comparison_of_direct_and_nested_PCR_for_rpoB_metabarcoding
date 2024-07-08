@@ -410,10 +410,12 @@ So we get the 11th column which is the gene_name, I take it out -u and I get thi
 
 ```bash=
 zcat 16S.tsv.gz| cut -f11 | sort -u > /PATH/genome_name_16S.txt
+#...
+cut -d'_' -f1,2 names_files.txt > genome_names_rpob.txt
 ```
 
 I recover those that are in common, so I look for the rpob genomes in the 16S genomes and if it's found it's good:
-grep  -F -f genome_name_16S.txt genomes_names_rpoB.txt > common_genomes.txt
+grep -F -f genome_names_rpob.txt  genome_name_16S.txt > common_genomes.txt
 
 We therefore need to remove those that are not in common in the 16S fasta.
 I'm looking for which 16S genome is not in the genomes that have rpob
@@ -465,7 +467,7 @@ awk '!/^#/{print $1}' FS="|" 16S.ecopcr > id_amplified.txt
 
 We also retrieve the same list of identifiers from my input fasta file in order to have a list of all those that are not in common. So that's all the species that haven't been amplified.
 ```bash=
-grep ">" treatment_commun/fichier_filtre.fasta | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
+grep ">" fasta_file.fasta | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
 ```
 To find out the difference between the two
 ```bash=
