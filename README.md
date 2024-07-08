@@ -29,9 +29,8 @@ FecthMGS needs the protein dna of the genes. If you also want to have the nuclei
 
 ## 2. Recovering rpoBs with fetchMGs
 
-I need the .faa protein files and the .fna sequence files so that fetchMGS can give me the nucleic acid version.
-
-But for this to work, the two files must have the same sequence identifiers 
+We require the .faa protein files and the .fna sequence files to allow fetchMGS to generate the nucleic acid version.
+To ensure this functionality, the .faa and .fna files must have matching sequence identifiers.
 
 
 ### 2.a Preparing .faa files 
@@ -41,12 +40,10 @@ $ head GCF_000219415.3_ASM21941v3_protein.faa
 >WP_002964358.1 MULTISPECIES: 30S ribosomal protein S19 [Hyphomicrobiales]
 MARSVWKGPFVDGYLLKKAEKVREGGRNEVIKMWSRRSTILPQFVGLTFGVYNGNKHVPVSVSEEMVGHKFGEFAPTRTYYGHGADKKAKRK
 ```
-so I made a bash script to keep only the protein identifier (WP_ ...)
-
-/!\please don't forget to change your variable paths in the script 
+You need to use the script rename_faa.sh which only retains the protein identifier 
 
 ```bash=
-./rename_faa.sh
+./script/rename_faa.sh protein_seq/ protein_seq/modified_faa
 ```
 
 ### 2.b Preparing .fna files
@@ -59,120 +56,55 @@ $ head GCF_000219415.3_ASM21941v3_cds_from_genomic.fna
 GTGGTTGCCCTTCATGGCGCCGTTCCGCGCCGTTCCGCCGCGTCCTTCACCAATATCAAGGTTCGCGTGCGCGACGACCG(..)ACAGGAAGCGCTCGTCGCCAACATCGCCGTGGCGCTCAGAAAGCTCTCGATAGGCGAATTGTTGCTTTAG
 ```
 
-I only keep the protein_id section with the script:
+We only keep the protein_id section with the script rename_fna.sh 
 
 /!\please don't forget to change your variable paths in the script 
 ```bash=
-./rename_fna.sh
-
+./script/rename_fna.sh cds_genomic_seq/ cds_genomic_seq/modified_fna
 ```
-
 NB: This script does not save sequences if they do not have a protein identifier because if there is no protein equivalent, FetchMGS does not run on nucleic acids. They are therefore useless. 
 
 ### 2.c  Launch fetchMGS
+You need a file with all the file names in the protein folder. You can use the command:
 
-You need to run fetch MGS for about 80,000 files. So if I give the command line as it is : 
+```
+protein_seq/modified_faa/ | sed 's/_protein_modified\.faa//' > names_files.txt
+```
+
+and then run the script_fetch.sh.
+NB: this can be a lengthy process. 
+The perl version of FetchMGS is used here. There is now a python version, not used here. (https://github.com/motu-tool/fetchMGs)
 
 ```bash=
-./fetchMGs/fetchMGs.pl -m extraction test/arc_refseq_cg/2024-01-08_11-31-26/files/*.faa -d arc_refseq_cg/2024-01-08_07-45-09/files/*.fna -c COG0085
+./script/script_fetch.sh names_files.txt output_fetchMGS cds_genomic_seq/modified_fna/ protein_seq/modified_faa/
 ```
-I'm going to get an error because there are too many entries. 
-
-So, I get the file names: 
-
-```
-ls protein_seq/arc_refseq_cg/2024-02-05_09-01-16/files/modified/ > tmp.txt
-sed 's/_protein_modified\.faa//' > names_files.txt
-rm tmp.txt
-```
-and I create a script that loops through the command line by file 
-
-/!\please don't forget to change your variable paths in the script 
-```bash=
-./launch_FetchMGS.sh
-```
-
-It takes a while to run, but it's fetchMGS and you only have to do it once.
-
-
 Fetch creates a folder for each genome, containing the files COG0085.faa and COG0085.fna. COG0085 corresponds to rpoB, which is the one we are interested in. 
 ## 3. Formatting the file
 
 ### 3.a Add Taxid
-The taxid must be added to launch obiconvert before EcoPCR. I make a table of correspondence between the genome identifier and its species taxids, which are columns 1 and 7 of the assembly summary downloaded by genome_updater:
+The taxid must be added to launch obiconvert before EcoPCR. You need to make  a table of correspondence between the genome identifier and its species taxids, which are columns 1 and 7 of the assembly summary downloaded by genome_updater:
 
 ```
-cut -f1,7 genome/arc_refseq_cg/2024-02-05_09-00-49/assembly_summary.txt > correspondance_tab.txt
+cut -f1,7 protein_seq/assembly_summary_light.txt > correspondance_tab.txt
 ```
 
-Thanks to this correspondence table, I've made a python script which will go into each folder resulting from FetchMGS; find the ID and the corresponding taxid then it will add it to the name of the sequence next to the protein ID.
+We now need to use a python script which will go into each FetchMGS result folder and add the taxid corresponding to the genome in the output files. This taxid is added to the sequence name in the form "| taxid=XXX;", which is very important for what follows.
 
-/!\please don't forget to change your variable paths in the script 
 ```python=
-python add_taxid.py
+module load devel/python/Python-3.11.1
+python script/add_taxid.py correspondance_tab.txt output_fetchMGS/
 ```
-
 
 ### 3.b Concatenation of fna files to obtain our rpob regions 
 
 They must then be concatenated to obtain the complete file with the rpob genes in nucleic acid.
 
 ```bash=
-find output/ -name "COG0085.fna" -exec cat {} + > concatenated_COG0085.fna
+find output_fetchMGS/ -name "COG0085.fna" -exec cat {} + > concatenated_COG0085.fna
 ```
 
 ## 4. Formatting databases for EcoPCR: Obitools
 ### Obitools for rpod sequences
-
-```bach!
-mkdir ecoPCR_db/
-obiconvert --fasta concatenated_COG0085.fna --ecopcrdb-output=ecoPCR_db/rpob -t ncbi_tax_dumb/
-```
-
-NB: it is possible to have an error because sometimes genome updater has more IDs than the ncbi taxonomy which has not yet been updated. I didn't get this error here. 
-
-## 5. Launch EcoPCR
-
-### 1st PCR for Nested 
-
-| rpoB_F  | rpoB_R |
-| -------- | -------- | 
-| CAGYTDTCNCARTTYATGGAYCA|AGTTRTARCCDTYCCANGKCAT| 
-
-
-```bash=
-$ ecoPCR -d ecoPCR_db/rpob -e 2 CAGYTDTCNCARTTYATGGAYCA AGTTRTARCCDTYCCANGKCAT  > primers/rpob_l70_L8000_e2.ecopcr
-```
-
-I retrieve the names of the genomes that have been amplified, those present in the EcoPCR result. I retrieve their species taxid and then their taxonomy.
-The genomes that are not in EcoPCR are also recovered, i.e. those that have not been amplified. I also recover their species ID.
-If they are in the EcoPCR result, they have a "True" in the "amplified" column, and if they are not, they have a "False".
-I then run the script for the Krona
-
-```bash=
-#Recovers amplified protein IDs
-awk '!/^#/{print $1}' FS="|" ecoPCR_rpob1/rpob_l70_L8000_e2.ecopcr > id_amplified.txt
-
-# Total IDs in all genomes
-grep ">" concatenated_COG0085.fna | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
-
-#To find out the difference between the two
-grep -v -F -f id_amplified.txt id_seq_total.txt > not_amplified.txt
-```
-
-I've got the sequence identifiers now I want the taxids:
-
-```bash=
-#my file with sequence names only
-grep ">" concatenated_COG0085.fna > name_seq.txt
-awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' not_amplified.txt name_seq.txt > tmp_no_amplified.txt
-cut -d'|' -f2 tmp_no_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > no_amplified_speciesTAXID.txt
-awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' id_amplified.txt name_seq.txt > tmp_amplified.txt
-cut -d'|' -f2 tmp_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > amplified_speciesTAXID.txt
-
-```
-I can use the TaxonKit tool to access their taxonomies. 
-
 To do this, download the folder containing the ncbi taxonomy from this link: https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/
 
 ```bash=
@@ -182,28 +114,83 @@ gunzip new_taxdump.tar.gz
 tar -xvf new_taxdump.tar.gz
 ```
 
-```bash=
-# not amplified
-$ cat no_amplified_speciesTAXID.txt | taxonkit lineage --data-dir ../ncbi_tax_dumb/2024-15-02/ | taxonkit reformat --data-dir ../ncbi_tax_dumb/2024-15-02/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > no_amplified_species.taxo
-# amplified
-$ cat amplified_speciesTAXID.txt | taxonkit lineage --data-dir ../ncbi_tax_dumb/2024-15-02/ | taxonkit reformat --data-dir ../ncbi_tax_dumb/2024-15-02/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > amplified_species.taxo
+then, turn obiconvert:
+
+```bach!
+mkdir ecoPCR_db/
+module load devel/Miniconda/Miniconda3
+module load bioinfo/OBITools/1.2.11
+obiconvert --fasta concatenated_COG0085.fna --ecopcrdb-output=ecoPCR_db/rpob -t ncbi_tax_dumb/
+```
+Warning: errors may occur if a taxid is out of date in the ncbi taxonomy or if it has been deleted. Delete the problematic sequences.
+
+## 5. Launch EcoPCR
+
+### 1st PCR for Nested 
+
+```bash
+mkdir nested_1st_PCR
+cd nested_1st_PCR
 ```
 
-I remove all possible spaces in the names:
+| rpoB_F  | rpoB_R |
+| -------- | -------- | 
+| CAGYTDTCNCARTTYATGGAYCA|AGTTRTARCCDTYCCANGKCAT| 
+
+
+```bash=
+$ ecoPCR -d ecoPCR_db/rpob -e 2 CAGYTDTCNCARTTYATGGAYCA AGTTRTARCCDTYCCANGKCAT  > nested_1st_PCRrpob.ecopcr
+```
+
+You must retrieve the names of the genomes that have been amplified, i.e. those present in the EcoPCR result. 
+Genomes that are not in the EcoPCR are also retrieved, i.e. those that have not been amplified.
+Their taxids are also recovered for taxonomy.
+
+```bash=
+#Recovers amplified protein IDs
+awk '!/^#/{print $1}' FS="|" nested_1st_PCRrpob.ecopcr > id_amplified.txt
+
+# Total IDs in all genomes
+grep ">" ../concatenated_COG0085.fna | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
+
+#To find out the difference between the two
+grep -v -F -f id_amplified.txt id_seq_total.txt > not_amplified.txt
+```
+
+For the taxid:
+
+```bash=
+#my file with sequence names only
+grep ">" ../concatenated_COG0085.fna > name_seq.txt
+awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' not_amplified.txt name_seq.txt > tmp_no_amplified.txt
+cut -d'|' -f2 tmp_no_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > no_amplified_speciesTAXID.txt
+awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' id_amplified.txt name_seq.txt > tmp_amplified.txt
+cut -d'|' -f2 tmp_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > amplified_speciesTAXID.txt
+
+```
+I can use the TaxonKit tool to access their taxonomies. 
+```bash=
+module load bioinfo/TaxonKit/0.15.0
+# not amplified
+$ cat no_amplified_speciesTAXID.txt | taxonkit lineage --data-dir ncbi_tax_dumb/ | taxonkit reformat --data-dir ncbi_tax_dumb/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > no_amplified_species.taxo
+# amplified
+$ cat amplified_speciesTAXID.txt | taxonkit lineage --data-dir ncbi_tax_dumb/ | taxonkit reformat --data-dir ncbi_tax_dumb/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > amplified_species.taxo
+```
+
+Reemove all possible spaces in the names:
 
 ```bash=
 $ sed 's/ /_/g' amplified_species.taxo > amplified_species_wc.taxo
 $ sed 's/ /_/g' no_amplified_species.taxo > no_amplified_species_wc.taxo
 ```
-I reformat these files so that they are in the format accepted by krona:
-* I add a "Sequence" column which corresponds to a sequence sum. They are all 1
-* I add an "amplified" column which is True or False. So True for the amplified file and False for the non-amplified file.
 
-NB: I'm changing the True and False by hand in the script because I didn't add the argument.
+Reformat these files so that they are in the format accepted by krona:
+* Add a "Sequence" column which corresponds to a sequence sum. They are all 1
+* Aadd an "amplified" column which is True or False. So True for the amplified file and False for the non-amplified file.
 
-/!\please don't forget to change your variable paths in the script 
 ```python=
-python format_krona.py input_file output_file
+python ../script/format_krona.py amplified_species_wc.taxo amplified_species_wc_reformat.tsv True
+python ../script/format_krona.py no_amplified_species_wc.taxo no_amplified_species_wc_reformat.tsv False
 ```
 
 
@@ -226,7 +213,8 @@ cut -f 2-4 final_results.tsv > input.tsv
 ```
 
 I run the script to get the krona:
-TODO: add  make_krona_xml_bis.py
+
+
 ```bash=
 $ python make_krona_xml_bis.py input.tsv output.xml  --name rpob -v --color_label amplified  --dataset_labels sequence
 # launch krona
@@ -234,46 +222,53 @@ $ ktImportXML output.xml
 
 ```
 
-### 2nde PCR 
+### direct_stategy
+
+```bash
+mkdir direct_stategy
+cd direct_stategy
+```
 | Univ_rpoB_F_deg  | Univ_rpoB_R_deg |
 | -------- | -------- | 
 | GGYTWYGAAGTNCGHGACGTDCA|TGACGYTGCATGTTBGMRCCCATMA| 
 
 
 ```bash=
-$ ecoPCR -d ecoPCR_db/rpob -e 2 GGYTWYGAAGTNCGHGACGTDCA TGACGYTGCATGTTBGMRCCCATMA  > primers/rpob_l70_L8000_e2.ecopcr
-
+$ ecoPCR -d ecoPCR_db/rpob -e 2 GGYTWYGAAGTNCGHGACGTDCA TGACGYTGCATGTTBGMRCCCATMA  > rpob_nested_1st_PCR_then_2nd_PCR.ecopcr
 ```
 
 => same treatment as above
 
-### Nested PCR
-
-For this one, I took the EcoPCR results for the first pair of primers called rpoB_F and rpoB_R.
+### Nested_1st_PCR_then_2nd_PCR
+```bash
+mkdir nested_1st_PCR_then_2nd_PCR
+cd nested_1st_PCR_then_2nd_PCR
+```
+For this one, We need to took the EcoPCR results for the first pair of primers called rpoB_F and rpoB_R.
 Then I kept only the genomes that appeared in the EcoPCR results, so when the primers worked.
 
 ```bash!
 #Recovers amplified protein IDs
-awk '!/^#/{print $1}' FS="|" ecoPCR_rpob1/rpob_l70_L8000_e2.ecopcr > id_amplified.txt
+awk '!/^#/{print $1}' FS="|" nested_1st_PCR/nested_1st_PCRrpob.ecopcr > id_amplified.txt
 
 # Total IDs in all genomes
-grep ">" concatenated_COG0085.fna | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
+grep ">" ../concatenated_COG0085.fna | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
 
 # To find out the difference between the two
 grep -v -F -f liste_id_ecoPCR_sort.txt liste_id_concatened_COG0085_sort.txt > not_amplified.txt
 ```
 
-I use this script to remove non-amplified genomes 
+Use the deletion_seq_in_fasta.py script to remove non-amplified genomes 
 
 /!\please don't forget to change your variable paths in the script 
 ```bash=
-python deletion_seq_in_fasta.py
+python deletion_seq_in_fasta.py ../concatenated_COG0085.fna nested_1st_PCR/not_amplified.txt new_fasta.fasta
 ```
-Now I'm going to reformat the fasta with Obitools to run EcoPCR on it.
+No we need to reformat the fasta with Obitools to run EcoPCR on it.
 
 ```bash=
 mkdir ecoPCR_db/
-$ obiconvert --fasta fichier_filtre.fasta --ecopcrdb-output=ecoPCR_db/rpob -t ../ncbi_tax_dumb/2024-15-02/
+$ obiconvert --fasta new_fasta.fasta --ecopcrdb-output=ecoPCR_db/rpob -t ncbi_tax_dumb/
 ```
 
 ecoPCR launch with 2nd primers
@@ -282,113 +277,22 @@ ecoPCR launch with 2nd primers
 | GGYTWYGAAGTNCGHGACGTDCA|TGACGYTGCATGTTBGMRCCCATMA| 
 
 ```bash=
-$ ecoPCR -d ecoPCR_db/rpob -e 2  GGYTWYGAAGTNCGHGACGTDCA TGACGYTGCATGTTBGMRCCCATMA  > primers/rpob_l70_L8000_e2.ecopcr
+$ ecoPCR -d ecoPCR_db/rpob -e 2  GGYTWYGAAGTNCGHGACGTDCA TGACGYTGCATGTTBGMRCCCATMA  > rpob_nested_1st_PCR_then_2nd_PCR.ecopcr
 
 ```
-I recover the identifiers of the species amplified by the primers
-
-```bash=
-$ awk '!/^#/{print $1}' FS="|" primers/rpob_l70_L8000_e2.ecopcr > id_seq_amplified_species.txt
-
-```
-
-I also retrieve the same list of identifiers from my input fasta file in order to have a list of all those that are not in common. So that's all the species that haven't been amplified.
-```bash=
-grep ">" fichier_filtre.fasta | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
-```
-
-to obtain the list of non-amplified:
-```bash=
-grep -v -F -f id_seq_amplified_species.txt id_seq_total.txt > id_no_amplified_species.txt
-```
-
-I recover the taxids of those that have been amplified as well as those that have not been amplified:
-```bash=
-#my file with sequence names only
-grep ">" concatenated_COG0085.fna > name_seq.txt
-awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' id_no_amplified_species.txt name_seq.txt > tmp_no_amplified.txt
-cut -d'|' -f2 tmp_no_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > no_amplified_speciesTAXID.txt
-awk 'NR==FNR {ids[$1]; next} {for (id in ids) {if (index($0, id)) {print; break}}}' id_seq_amplified_species.txt name_seq.txt > tmp_amplified.txt
-cut -d'|' -f2 tmp_amplified.txt | cut -d'=' -f2 |cut -d ';' -f1  > amplified_speciesTAXID.txt
-```
-Taxonkit:
-
-```bash=
-# not amplified
-$ cat no_amplified_speciesTAXID.txt | taxonkit lineage --data-dir ../ncbi_tax_dumb/2024-15-02/ | taxonkit reformat --data-dir ../ncbi_tax_dumb/2024-15-02/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > no_amplified_species.taxo
-# amplified
-$ cat amplified_speciesTAXID.txt | taxonkit lineage --data-dir ../ncbi_tax_dumb/2024-15-02/ | taxonkit reformat --data-dir ../ncbi_tax_dumb/2024-15-02/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > amplified_species.taxo
-```
-I remove all possible spaces in the names:
-
-```bash=
-$ sed 's/ /_/g' amplified_species.taxo > amplified_species_wc.taxo
-$ sed 's/ /_/g' no_amplified_species.taxo > no_amplified_species_wc.taxo
-```
-
-I reformat these files so that they are in the format accepted by krona:
-* I add a "Sequence" column which corresponds to a sequence sum. They are all 1
-* I add an "amplified" column which is True or False. So True for the amplified file and False for the non-amplified file.
-  
-NB: I change the True and False by hand in the script because I didn't add the argument.
-
-header
-```bash=
-$ cat header.tsv
-seqID	sequence	taxonomy	amplified
-```
-
-concatenate:
-
-```bash=
-$ cat header.tsv amplified_species_wc_reformat.tsv > tmp.tsv
-$ cat tmp.tsv no_amplified_species_wc_reformat.tsv > final_results.tsv
-```
-
-I'm removing the column corresponding to the taxid because it's not accepted by the krona script:
-
-```bash=
-cut -f 2-4 final_results.tsv > input.tsv
-```
-
-script for krona
-```bash=
-$ python make_krona_xml_bis.py input.tsv output.xml  --name rpob -v --color_label amplified  --dataset_labels sequence
-# launch krona
-$ ktImportXML output.xml
-
-```
+Then, same treatment as above.
 
 # Comparison with  16S
-I have a database of 16S sequences extract from refseq genomes which use gff, which I can download using genome_updater.
+I have a complete database of 16S sequences extract from refseq and genbank genomes which use gff, which I can download using genome_updater.
 
-```bash=
-./../genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "genomic.gff.gz,genomic.fna.gz" -t 12 -N
-```
-for this we need to uses the script src/extract_16S23S.py
+For more information on this database: gabryelle.agoutin@inrae.fr
 
-we need 2 files genome_dirs.txt and genome_files_with_taxid.txt created respectively by the scripts find_dirs.sh and find_name.py by adapting the paths of the download databases. 
-the two files resemble a: 
-```bash=
-gagoutin@genobioinfo2 ~/work/test_16S/base_16S_Geraldine $ head -2 genome_dirs.txt
-/home/gagoutin/work/base_données/NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/415
-/home/gagoutin/work/base_données/NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/395
-$ head -2 genome_files_with_taxid.txt
-/home/gagoutin/work/base_données//NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/415/GCA_018630415.1_ASM1863041v1_genomic.fna.gz GCA_018630415.1 1280
-/home/gagoutin/work/base_données//NCBI_refseq_genbank_archea_bacteria/NCBI_refseq_genbank_archea_bacteria_05_2024/downloads/2024-05-15_11-08-32/files/GCA/018/630/395/GCA_018630395.1_ASM1863039v1_genomic.fna.gz GCA_018630395.1 1280
-```
-and then run the script:
-
-```bash=
-python extract_16S23S.py -a genome_dirs.txt -t genome_files_with_taxid.txt
-```
-
-The genomes in this database are kept only if they also have an rpoB sequence to make the comparison reliable.
+We need to keep the genomes in common between my rpob base and my 16S base so that they are comparable. 
 I retrieve the folder names of the fetchMGS results and I retrieve the names of the genomes that have a non-empty fna file.
 
 ```bash=
 l output_fetchMGS/*/*.fna > fna_files.txt
-python find_fna_not_empty.py > genomes_names_rpoB.txt
+python find_fna_not_empty.py fna_files.txt  > genomes_names_rpoB.txt
 ```
 
 For the 16S genomes, after running the extract script  extract_16S23S.py  we get a tsv file that looks like this:
@@ -409,12 +313,12 @@ rna-KGY51_12075 JAGXLS010000180.1       16S ribosomal RNA       16S     1       
 So we get the 11th column which is the gene_name, I take it out -u and I get this list back
 
 ```bash=
-zcat 16S.tsv.gz| cut -f11 | sort -u > /PATH/genome_name_16S.txt
-#...
+zcat 16S.tsv.gz| cut -f11 | sort -u > genome_name_16S.txt
+#To get the snom of rpob genomes, use the  names_files.txt file we made above
 cut -d'_' -f1,2 names_files.txt > genome_names_rpob.txt
 ```
 
-I recover those that are in common, so I look for the rpob genomes in the 16S genomes and if it's found it's good:
+Look for the rpob genomes in the 16S genomes and if it's found it's good:
 grep -F -f genome_names_rpob.txt  genome_name_16S.txt > common_genomes.txt
 
 We therefore need to remove those that are not in common in the 16S fasta.
@@ -438,10 +342,10 @@ This will allow me to retrieve the seqid that will allow me to delete this seque
 
 ```bash=
 cut -f2 output.tsv > seqid_not_com.txt
-python delete_sequence_in_a_fasta.py
+/deletion_seq_in_fasta.py 16S.fna seqid_not_com.txt new_fasta_file.fasta
 ```
 
-Formatting my new fasta so that it is compatible with EcoPCR with obiconvert 
+Formatting the new fasta so that it is compatible with EcoPCR with obiconvert 
 
 ```bash=
 mkdir ecoPCR_db/
@@ -451,6 +355,10 @@ if you ever get obiconvert errors due to an unknown ID, delete the sequences con
 
 Now going to use this fasta to launch my EcoPCR 16S.
 
+```bash
+mkdir 16S
+cd 16S
+```
 
 | 16S_F  | 16S_R |
 | -------- | -------- | 
