@@ -157,7 +157,7 @@ awk '!/^#/{print $1}' FS="|" ecoPCR_rpob1/rpob_l70_L8000_e2.ecopcr > id_amplifie
 grep ">" concatenated_COG0085.fna | cut -d'|' -f1 |cut -d '>' -f2 > id_seq_total.txt
 
 #To find out the difference between the two
-grep -v -F -f liste_id_ecoPCR_sort.txt id_amplified.txt > not_amplified.txt
+grep -v -F -f id_amplified.txt id_seq_total.txt > not_amplified.txt
 ```
 
 I've got the sequence identifiers now I want the taxids:
