@@ -314,8 +314,6 @@ So we get the 11th column which is the gene_name, I take it out -u and I get thi
 
 ```bash=
 zcat 16S.tsv.gz| cut -f11 | sort -u > genome_name_16S.txt
-#To get the snom of rpob genomes, use the  names_files.txt file we made above
-cut -d'_' -f1,2 names_files.txt > genome_names_rpob.txt
 ```
 
 Look for the rpob genomes in the 16S genomes and if it's found it's good:
