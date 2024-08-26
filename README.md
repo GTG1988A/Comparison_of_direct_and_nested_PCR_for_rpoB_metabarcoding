@@ -15,15 +15,15 @@ chmod +x genome_updater.sh
 ```
 ### Download 
 
-I download genomes at all assembly levels: complete genome, chromosome, scaffold and contig. So I get all the rpob sequences I can.
+I download genomes at assembly levels complete genome and chromosomeL. I don't take scaffold and contig, to get the best possible quality rpoB sequences.
 FecthMGS needs the protein dna of the genes. If you also want to have the nucleic sequences, you have to give it that too. So I download this:
 
 ```bash=
 # protein sequence file FAA
-./genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "protein.faa.gz" -t 12
+./genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "protein.faa.gz" -l "complete genome,chromosome" -t 12
 
 # protein nucleic acid sequence file FNA
-./genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "cds_from_genomic.fna.gz" -t 12
+./genome_updater.sh -o "arc_refseq_cg" -d "refseq" -g "bacteria" -f "cds_from_genomic.fna.gz" -l "complete genome,chromosome" -t 12
 
 ```
 
@@ -31,7 +31,6 @@ FecthMGS needs the protein dna of the genes. If you also want to have the nuclei
 
 We require the .faa protein files and the .fna sequence files to allow fetchMGS to generate the nucleic acid version.
 To ensure this functionality, the .faa and .fna files must have matching sequence identifiers.
-
 
 ### 2.a Preparing .faa files 
 the files are in the form:
@@ -72,13 +71,16 @@ protein_seq/modified_faa/ | sed 's/_protein_modified\.faa//' > names_files.txt
 ```
 
 and then run the script_fetch.sh.
-NB: this can be a lengthy process. 
+
+NB: this can be a lengthy process.
+
 The perl version of FetchMGS is used here. There is now a python version, not used here. (https://github.com/motu-tool/fetchMGs)
 
 ```bash=
 ./script/script_fetch.sh names_files.txt output_fetchMGS cds_genomic_seq/modified_fna/ protein_seq/modified_faa/
 ```
-Fetch creates a folder for each genome, containing the files COG0085.faa and COG0085.fna. COG0085 corresponds to rpoB, which is the one we are interested in. 
+Fetch creates a folder for each genome, containing the files COG0085.faa and COG0085.fna. COG0085 corresponds to rpoB, which is the one we are interested in.
+
 ## 3. Formatting the file
 
 ### 3.a Add Taxid
@@ -178,7 +180,7 @@ cat no_amplified_speciesTAXID.txt | taxonkit lineage --data-dir ncbi_tax_dumb/ |
 cat amplified_speciesTAXID.txt | taxonkit lineage --data-dir ncbi_tax_dumb/ | taxonkit reformat --data-dir ncbi_tax_dumb/  -f "{k};{p};{c};{o};{f};{g};{s}" -r "Unassigned" -P | cut -f 1,3-10  > amplified_species.taxo
 ```
 
-Reemove all possible spaces in the names:
+Remove all possible spaces in the names:
 
 ```bash=
 sed 's/ /_/g' amplified_species.taxo > amplified_species_wc.taxo
@@ -348,10 +350,10 @@ Now going to use this fasta to launch my EcoPCR 16S.
 
 | 16S_F  | 16S_R |
 | -------- | -------- | 
-| GAAGAGTTTGATCATGGCTC|AAGGAGGTGATCCAGCCGCA|
+| ACGGRAGGCAGCAG|TACCAGGGTATCTAATCCT|
 
 ```bash=
-ecoPCR -d ecoPCR_db/16S -e 2  GAAGAGTTTGATCATGGCTC AAGGAGGTGATCCAGCCGCA  > 16S.ecopcr
+ecoPCR -d ecoPCR_db/16S -e 2  ACGGRAGGCAGCAG TACCAGGGTATCTAATCCT  > 16S.ecopcr
 ```
 
 We retrieve the identifiers of the species amplified by the primers and the taxid in good format
